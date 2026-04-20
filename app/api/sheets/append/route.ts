@@ -30,6 +30,15 @@ export async function POST(req: Request) {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // --- Dynamic Sheet Discovery ---
+    // Instead of assuming "Sheet1", let's find the first sheet name
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: targetSheetId,
+    });
+    
+    const sheetName = spreadsheet.data.sheets?.[0]?.properties?.title || 'Sheet1';
+    console.log(`Targeting sheet: ${sheetName}`);
+
     // Prepare data for Google Sheets
     // Columns: Code, Name, Effective Date, PM Sign, Ops Sign, GM Sign, Archive Time
     const values = records.map((record: any) => [
@@ -39,20 +48,23 @@ export async function POST(req: Request) {
       record.pmSign,
       record.opsSign,
       record.gmSign,
-      new Date().toISOString()
+      new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
     ]);
 
-    // Append to sheet (assumes the first sheet is where to append)
-    await sheets.spreadsheets.values.append({
+    // Append to sheet
+    const response = await sheets.spreadsheets.values.append({
       spreadsheetId: targetSheetId,
-      range: 'Sheet1!A2', // Adjust range/sheet name as needed
+      range: `${sheetName}!A2`, 
       valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
       requestBody: {
         values,
       },
     });
 
-    return NextResponse.json({ success: true });
+    console.log('Sheets Append Response:', response.status, response.statusText);
+
+    return NextResponse.json({ success: true, sheetName });
   } catch (error: any) {
     console.error('Google Sheets error:', error);
     return NextResponse.json({ error: error.message || 'Failed to sync with Google Sheets' }, { status: 500 });

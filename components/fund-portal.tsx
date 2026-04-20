@@ -386,19 +386,26 @@ export default function FundPortal() {
           gmSign: gmSignDate,
         }));
 
-        await fetch('/api/sheets/append', {
+        const sheetRes = await fetch('/api/sheets/append', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ records: sheetData }),
         });
-      } catch (sheetsErr) {
+
+        const sheetResult = await sheetRes.json();
+
+        if (!sheetRes.ok) {
+          throw new Error(sheetResult.error || 'Sheets API returned an error');
+        }
+
+        console.log(`Successfully synced to Google Sheet: ${sheetResult.sheetName}`);
+        alert(`歸檔成功！資料已同步至永久歷史庫與試算表 (${sheetResult.sheetName})。`);
+      } catch (sheetsErr: any) {
         console.error("Google Sheets sync failed:", sheetsErr);
-        // We don't block the UI here as Firestore succeeded, 
-        // but we log it for the developer.
+        alert(`注意：Firestore 歸檔成功，但 Google Sheets 同步失敗：${sheetsErr.message}。請確認設定或手動核對。`);
       }
 
       setScheduledFunds([]); 
-      alert(`已完成審議運作，共 ${scheduledFunds.length} 筆基金成功保存至永久歷史紀錄 (並嘗試同步至 Google Sheets)。`);
       setActiveTab('history');
     } catch (error) {
       console.error("Archive failed:", error);
