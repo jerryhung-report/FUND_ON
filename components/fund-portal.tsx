@@ -249,20 +249,21 @@ export default function FundPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-800 selection:bg-blue-100 p-6 flex flex-col gap-6">
+    <div className="min-h-screen bg-slate-100 font-sans text-slate-800 selection:bg-blue-100 p-3 md:p-6 flex flex-col gap-4 md:gap-6">
       
       {/* Bento Header */}
-      <header className="flex items-center justify-between bg-white rounded-[2rem] p-4 shadow-sm border border-slate-200 sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-blue-700 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-200">
+      <header className="max-w-[1440px] w-full mx-auto flex flex-col md:flex-row items-center justify-between bg-white rounded-[1.5rem] md:rounded-[2rem] p-3 md:p-4 shadow-sm border border-slate-200 sticky top-0 md:top-4 z-50 gap-4">
+        <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-700 rounded-lg md:rounded-xl flex items-center justify-center text-white font-black text-lg md:text-xl shadow-lg shadow-blue-200 shrink-0">
             口
           </div>
-          <div>
-            <h1 className="text-lg font-black tracking-tighter leading-none text-slate-800">口袋投顧 | 基金上架審議</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-0.5">Listing Operations v2.0</p>
+          <div className="flex flex-col">
+            <h1 className="text-sm md:text-lg font-black tracking-tighter leading-none text-slate-800">口袋投顧 | 基金上架審議</h1>
+            <p className="text-[8px] md:text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-0.5">Listing Operations v2.0</p>
           </div>
         </div>
 
+        {/* Desktop Nav */}
         <nav className="hidden lg:flex gap-1">
           {[
             { id: 'summary', label: '審議摘要', icon: <CheckSquare size={14}/> },
@@ -285,12 +286,36 @@ export default function FundPortal() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        {/* Mobile Nav (Scrollable) */}
+        <nav className="lg:hidden flex w-full overflow-x-auto no-scrollbar gap-1 pb-1">
+          {[
+            { id: 'summary', label: '摘要', icon: <CheckSquare size={14}/> },
+            { id: 'scheduled', label: '清單', icon: <ListChecks size={14}/> },
+            { id: 'history', label: '歷史', icon: <History size={14}/> },
+            { id: 'instructions', label: '說明', icon: <AlertCircle size={14}/> },
+            { id: 'mapping', label: '映射', icon: <Code size={14}/> }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap border ${
+                activeTab === tab.id 
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                : 'bg-white text-slate-500 border-slate-200'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="hidden md:flex items-center gap-3">
         </div>
       </header>
 
       {/* Main Content (Bento Layout) */}
-      <main className="flex-grow">
+      <main className="flex-grow max-w-[1440px] w-full mx-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -302,58 +327,70 @@ export default function FundPortal() {
           >
             {/* 1. Summary Bento Grid */}
             {activeTab === 'summary' && (
-              <div className="grid grid-cols-12 gap-6 h-full">
+              <div className="grid grid-cols-12 gap-4 md:gap-6 h-full">
                 {/* Progress Card (Col 3) */}
-                <div className="col-span-12 lg:col-span-3 bg-blue-700 rounded-[2.5rem] p-8 text-white flex flex-col justify-between shadow-xl shadow-blue-200/50 relative overflow-hidden group">
+                <div className="col-span-12 lg:col-span-3 bg-blue-700 rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-8 text-white flex flex-col justify-between shadow-xl shadow-blue-200/50 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-24 -mt-24" />
                   
                   <div className="relative z-10">
                     <h3 className="text-[10px] font-black opacity-60 uppercase tracking-[0.2em] mb-3">Project Status</h3>
-                    <p className="text-2xl font-black leading-tight tracking-tighter">
+                    <p className="text-xl md:text-2xl font-black leading-tight tracking-tighter">
                       基金上架審議
                     </p>
                   </div>
 
-                  <div className="relative z-10 py-10 flex flex-col items-center">
-                    <div className="relative w-40 h-40">
+                  <div className="relative z-10 py-6 md:py-10 flex flex-col items-center">
+                    <div className="relative w-32 h-32 md:w-40 md:h-40">
                       <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-blue-800" />
+                        {/* Mobile Circles */}
+                        <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-blue-800 md:hidden" />
+                        <motion.circle 
+                          cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="10" fill="transparent" 
+                          strokeDasharray="351.8" 
+                          initial={{ strokeDashoffset: 351.8 }}
+                          animate={{ strokeDashoffset: 351.8 - (351.8 * stats.percent) / 100 }}
+                          transition={{ duration: 1.5, ease: 'easeOut' }}
+                          className="text-blue-300 md:hidden" 
+                        />
+
+                        {/* Desktop Circles */}
+                        <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-blue-800 hidden md:block" />
                         <motion.circle 
                           cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="14" fill="transparent" 
                           strokeDasharray="440" 
                           initial={{ strokeDashoffset: 440 }}
                           animate={{ strokeDashoffset: 440 - (440 * stats.percent) / 100 }}
                           transition={{ duration: 1.5, ease: 'easeOut' }}
-                          className="text-blue-300 shadow-[0_0_15px_rgba(147,197,253,0.5)]" 
+                          className="text-blue-300 shadow-[0_0_15px_rgba(147,197,253,0.5)] hidden md:block" 
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-4xl font-black tracking-tighter">{stats.percent}%</span>
-                        <span className="text-[9px] font-bold opacity-60 tracking-[0.2em]">COMPLETE</span>
+                        <span className="text-3xl md:text-4xl font-black tracking-tighter">{stats.percent}%</span>
+                        <span className="text-[8px] md:text-[9px] font-bold opacity-60 tracking-[0.2em]">COMPLETE</span>
                       </div>
                     </div>
-                    <p className="text-[10px] font-bold opacity-80 mt-6 bg-blue-800/40 px-3 py-1 rounded-full border border-blue-400/20 uppercase tracking-widest">
+                    <p className="text-[10px] font-bold opacity-80 mt-4 md:mt-6 bg-blue-800/40 px-3 py-1 rounded-full border border-blue-400/20 uppercase tracking-widest text-center">
                       已簽署 {stats.done} / {stats.total} 項目
                     </p>
                   </div>
 
-                  <button className="relative z-10 w-full py-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl text-[10px] font-black transition-all uppercase tracking-[0.2em] mt-4 backdrop-blur-sm">
+                  <button className="relative z-10 w-full py-3 md:py-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl text-[9px] md:text-[10px] font-black transition-all uppercase tracking-[0.2em] mt-2 backdrop-blur-sm">
                     View Full Audit
                   </button>
                 </div>
 
                 {/* Checklist Table (Col 9) */}
-                <div className="col-span-12 lg:col-span-9 bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="col-span-12 lg:col-span-9 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                  <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50/50 gap-3">
                     <h4 className="font-black text-slate-800 flex items-center gap-3">
                       <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]"></span>
                       基金上架檢核執行表
                     </h4>
-                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full uppercase tracking-[0.1em] border border-blue-100 ring-4 ring-white">Active Session</span>
+                    <span className="text-[9px] md:text-[10px] font-black text-blue-600 bg-blue-50 px-4 py-1.5 rounded-full uppercase tracking-[0.1em] border border-blue-100 ring-4 ring-white">Active Session</span>
                   </div>
                   
                   <div className="flex-grow overflow-y-auto max-h-[500px]">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
                       <thead>
                         <tr className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-50 sticky top-0 bg-white/80 backdrop-blur-md z-10">
                           <th className="px-6 py-5 w-16 text-center">簽章</th>
@@ -441,11 +478,11 @@ export default function FundPortal() {
 
             {/* 2. Scheduled List view Style (Adapts Bento) */}
             {activeTab === 'scheduled' && (
-              <div className="space-y-8 h-full max-w-[1440px] mx-auto">
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white rounded-[2rem] p-8 shadow-sm border border-slate-200 gap-6">
+              <div className="space-y-4 md:space-y-8 h-full">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-200 gap-6">
                   <div>
-                    <h2 className="text-3xl font-black text-slate-800 tracking-tighter">預定上架清單</h2>
-                    <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Pipeline Overview</p>
+                    <h2 className="text-xl md:text-3xl font-black text-slate-800 tracking-tighter">預定上架清單</h2>
+                    <p className="text-slate-400 text-[10px] md:text-sm font-bold uppercase tracking-widest mt-1">Pipeline Overview</p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
                     <div className="relative group flex-grow">
@@ -453,44 +490,44 @@ export default function FundPortal() {
                       <input 
                         type="text" 
                         placeholder="搜尋代號或名稱..." 
-                        className="pl-12 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm w-full lg:w-80 outline-none transition-all focus:bg-white focus:ring-4 focus:ring-blue-100"
+                        className="pl-12 pr-6 py-3 md:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs md:text-sm w-full lg:w-80 outline-none transition-all focus:bg-white focus:ring-4 focus:ring-blue-100"
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
-                    <div className="flex gap-3">
-                      <label className="cursor-pointer">
+                    <div className="flex gap-2 md:gap-3 flex-wrap sm:flex-nowrap">
+                      <label className="cursor-pointer flex-grow sm:flex-grow-0 text-center">
                         <input 
                           type="file" 
                           accept=".xlsx, .xls" 
                           className="hidden" 
                           onChange={handleImportExcel} 
                         />
-                        <div className="flex items-center gap-3 px-6 py-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-2xl text-xs font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest whitespace-nowrap">
-                          <Upload size={16} className="text-blue-400" />
-                          EXCEL 匯入
+                        <div className="flex items-center justify-center gap-2 md:gap-3 px-4 md:px-6 py-2.5 md:py-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest whitespace-nowrap">
+                          <Upload size={14} className="text-blue-400 md:w-4 md:h-4" />
+                          匯入
                         </div>
                       </label>
                       <button 
                         onClick={handleExportExcel}
-                        className="flex items-center gap-3 px-6 py-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-black transition-all shadow-sm active:scale-95 uppercase tracking-widest whitespace-nowrap"
+                        className="flex items-center justify-center gap-2 md:gap-3 px-4 md:px-6 py-2.5 md:py-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black transition-all shadow-sm active:scale-95 uppercase tracking-widest whitespace-nowrap flex-grow sm:flex-grow-0"
                       >
-                        <Download size={16} className="text-emerald-500" />
-                        EXCEL 匯出
+                        <Download size={14} className="text-emerald-500 md:w-4 md:h-4" />
+                        匯出
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
                       <thead>
                         <tr className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-50 bg-slate-50/50">
-                          <th className="px-8 py-6 w-32">類型</th>
-                          <th className="px-8 py-6">基金代碼</th>
-                          <th className="px-8 py-6">基金全稱 (含投資警語)</th>
-                          <th className="px-8 py-6">發行品牌</th>
-                          <th className="px-8 py-6 text-center">操作</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6 w-24 md:w-32">類型</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6">基金代碼</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6">基金全稱 (含投資警語)</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6">發行品牌</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6 text-center">操作</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -502,36 +539,36 @@ export default function FundPortal() {
                             transition={{ delay: idx * 0.05 }}
                             className="group hover:bg-blue-50/30 transition-colors cursor-pointer"
                           >
-                            <td className="px-8 py-6">
-                              <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-100/50 ${
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest border border-blue-100/50 ${
                                 fund.type === '境內' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600 border-purple-100'
                               }`}>
                                 {fund.type}
                               </span>
                             </td>
-                            <td className="px-8 py-6">
-                              <span className="text-[11px] font-mono font-black text-slate-400"># {fund.code}</span>
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <span className="text-[10px] md:text-[11px] font-mono font-black text-slate-400"># {fund.code}</span>
                             </td>
-                            <td className="px-8 py-6">
+                            <td className="px-6 md:px-8 py-4 md:py-6">
                               <div className="flex flex-col">
-                                <span className="text-sm font-black text-slate-700 group-hover:text-blue-700 transition-colors">
+                                <span className="text-xs md:text-sm font-black text-slate-700 group-hover:text-blue-700 transition-colors">
                                   {fund.name}
                                 </span>
                               </div>
                             </td>
-                            <td className="px-8 py-6">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                 {fund.brand}
                               </span>
                             </td>
-                            <td className="px-8 py-6 text-center">
+                            <td className="px-6 md:px-8 py-4 md:py-6 text-center">
                               <a 
                                 href="https://sites.google.com/cmoneyfund.com.tw/report/%E9%A6%96%E9%A0%81"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="mx-auto w-9 h-9 rounded-xl bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                className="mx-auto w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                               >
-                                <ChevronRight size={18}/>
+                                <ChevronRight size={16}/>
                               </a>
                             </td>
                           </motion.tr>
@@ -545,54 +582,54 @@ export default function FundPortal() {
 
             {/* 3. History view (Adapts Bento) */}
             {activeTab === 'history' && (
-              <div className="space-y-6 h-full">
-                <div className="flex justify-between items-center bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-200">
+              <div className="space-y-4 md:space-y-6 h-full">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-8 shadow-sm border border-slate-200 gap-4">
                   <div>
-                    <h2 className="text-3xl font-black text-slate-800 tracking-tighter">歷史上架紀錄</h2>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-1">Archive Repository</p>
+                    <h2 className="text-xl md:text-3xl font-black text-slate-800 tracking-tighter">歷史上架紀錄</h2>
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px] md:text-[10px] mt-1">Archive Repository</p>
                   </div>
-                  <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 justify-center px-4">
-                    <div className="relative group w-full max-w-xs">
+                  <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 justify-center w-full lg:max-w-xl">
+                    <div className="relative group w-full">
                       <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16}/>
                       <input 
                         type="date" 
                         className="pl-12 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold w-full outline-none transition-all focus:bg-white focus:ring-4 focus:ring-blue-100 text-slate-600 appearance-none"
                         defaultValue="2026-04-20"
                       />
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">生效基準日</span>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+                        <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest">生效基準日</span>
                       </div>
                     </div>
                   </div>
-                  <button className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-3xl text-xs font-black shadow-lg transition-all active:scale-95 uppercase tracking-widest">
+                  <button className="w-full lg:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-3xl text-[10px] md:text-xs font-black shadow-lg transition-all active:scale-95 uppercase tracking-widest">
                     <FileSearch size={16}/> Build Audit Report
                   </button>
                 </div>
 
-                <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[600px]">
                       <thead>
                         <tr className="bg-slate-50 text-[10px] uppercase tracking-[0.25em] font-black text-slate-400 border-b border-slate-100">
-                          <th className="p-8">基金資訊內容</th>
-                          <th className="p-8 text-center border-l border-slate-100">GM</th>
-                          <th className="p-8 border-l border-slate-100 whitespace-nowrap">生效日期</th>
+                          <th className="p-6 md:p-8">基金資訊內容</th>
+                          <th className="p-6 md:p-8 text-center border-l border-slate-100">GM</th>
+                          <th className="p-6 md:p-8 border-l border-slate-100 whitespace-nowrap">生效日期</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {historyFunds.map((h, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                            <td className="p-8">
-                              <div className="font-black text-slate-800 text-lg tracking-tight">{h.name}</div>
-                              <div className="inline-block bg-slate-100 text-slate-400 px-2 py-0.5 rounded text-[10px] font-mono font-black mt-2 uppercase tracking-tighter">ID: {h.code}</div>
+                            <td className="p-6 md:p-8">
+                              <div className="font-black text-slate-800 text-base md:text-lg tracking-tight line-clamp-2 md:line-clamp-none">{h.name}</div>
+                              <div className="inline-block bg-slate-100 text-slate-400 px-2 py-0.5 rounded text-[9px] md:text-[10px] font-mono font-black mt-2 uppercase tracking-tighter">ID: {h.code}</div>
                             </td>
-                            <td className="p-8 text-center border-l border-slate-50">
-                              <CheckCircle2 size={18} className="text-emerald-500 mx-auto" />
-                              <span className="text-[9px] font-mono text-slate-300 font-bold mt-1 block">{h.gmSign}</span>
+                            <td className="p-6 md:p-8 text-center border-l border-slate-50">
+                              <CheckCircle2 size={16} className="text-emerald-500 mx-auto" />
+                              <span className="text-[8px] md:text-[9px] font-mono text-slate-300 font-bold mt-1 block">{h.gmSign}</span>
                             </td>
-                            <td className="p-8 border-l border-slate-50">
-                              <div className="inline-flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-2.5 rounded-2xl border border-blue-100 font-black text-xs tracking-tight">
-                                <Calendar size={14} className="text-blue-400" /> {h.effectiveDate}
+                            <td className="p-6 md:p-8 border-l border-slate-50">
+                              <div className="inline-flex items-center gap-2 md:gap-3 bg-blue-50 text-blue-700 px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl border border-blue-100 font-black text-[10px] md:text-xs tracking-tight">
+                                <Calendar size={12} className="text-blue-400" /> {h.effectiveDate}
                               </div>
                             </td>
                           </tr>
@@ -705,24 +742,24 @@ export default function FundPortal() {
 
             {/* 5. Mapping view (Adapts Bento) */}
             {activeTab === 'mapping' && (
-              <div className="space-y-6 h-full">
-                <div className="bg-slate-900 rounded-[3rem] p-10 text-white flex flex-col lg:flex-row justify-between items-center gap-10 shadow-2xl relative overflow-hidden">
+              <div className="space-y-4 md:space-y-6 h-full">
+                <div className="bg-slate-900 rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 text-white flex flex-col lg:flex-row justify-between items-center gap-6 md:gap-10 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-64 h-64 bg-blue-600/10 rounded-full blur-[100px] -ml-32 -mt-32" />
                   
-                  <div className="relative z-10 flex items-center gap-8">
-                    <div className="p-6 bg-blue-600 rounded-[2rem] shadow-[0_0_40px_rgba(37,99,235,0.3)]">
-                      <Database size={40} />
+                  <div className="relative z-10 flex flex-col sm:flex-row items-center gap-4 md:gap-8 text-center sm:text-left">
+                    <div className="p-4 md:p-6 bg-blue-600 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_0_40px_rgba(37,99,235,0.3)]">
+                      <Database className="w-8 h-8 md:w-10 md:h-10" />
                     </div>
                     <div>
-                      <h2 className="text-3xl font-black tracking-tighter leading-tight">嘉實資訊源：欄位映射規範</h2>
-                      <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Central Definition Registry v1.4</p>
+                      <h2 className="text-xl md:text-3xl font-black tracking-tighter leading-tight">嘉實資訊源：欄位映射規範</h2>
+                      <p className="text-slate-500 text-[10px] md:text-sm font-bold uppercase tracking-widest mt-1">Central Definition Registry v1.4</p>
                     </div>
                   </div>
                   
-                  <div className="relative z-10 flex bg-slate-800/50 backdrop-blur-md rounded-3xl p-1.5 gap-1.5 border border-slate-700/50">
+                  <div className="relative z-10 flex bg-slate-800/50 backdrop-blur-md rounded-2xl md:rounded-3xl p-1 md:p-1.5 gap-1 md:gap-1.5 border border-slate-700/50">
                     <button 
                       onClick={() => setFundType('domestic')}
-                      className={`px-8 py-3 rounded-[1.25rem] text-[10px] font-black uppercase tracking-[0.15em] transition-all ${
+                      className={`px-4 md:px-8 py-2 md:py-3 rounded-xl md:rounded-[1.25rem] text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap ${
                         fundType === 'domestic' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -730,7 +767,7 @@ export default function FundPortal() {
                     </button>
                     <button 
                       onClick={() => setFundType('offshore')}
-                      className={`px-8 py-3 rounded-[1.25rem] text-[10px] font-black uppercase tracking-[0.15em] transition-all ${
+                      className={`px-4 md:px-8 py-2 md:py-3 rounded-xl md:rounded-[1.25rem] text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] transition-all whitespace-nowrap ${
                         fundType === 'offshore' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -739,39 +776,39 @@ export default function FundPortal() {
                   </div>
                 </div>
 
-                <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
                       <thead>
                         <tr className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] border-b border-slate-50 bg-slate-50/50">
-                          <th className="px-8 py-6">資料來源檔案</th>
-                          <th className="px-8 py-6">欄位名稱</th>
-                          <th className="px-8 py-6 text-blue-600">JSON SCHEMA (V-CODE)</th>
-                          <th className="px-8 py-6">業務備註</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6">資料來源</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6">欄位名稱</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6 text-blue-600">V-CODE</th>
+                          <th className="px-6 md:px-8 py-4 md:py-6">業務備註</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {MAPPING_RULES[fundType].map((item, idx) => (
                           <tr key={idx} className="group hover:bg-blue-50/30 transition-colors">
-                            <td className="px-8 py-6">
-                              <div className="flex items-center gap-3">
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <div className="flex items-center gap-2 md:gap-3">
                                 <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.file}</span>
+                                <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.file}</span>
                               </div>
                             </td>
-                            <td className="px-8 py-6">
-                              <span className="text-xl font-black text-slate-800 group-hover:text-blue-700 transition-colors tracking-tight">
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <span className="text-base md:text-xl font-black text-slate-800 group-hover:text-blue-700 transition-colors tracking-tight">
                                 {item.label}
                               </span>
                             </td>
-                            <td className="px-8 py-6">
-                              <span className="text-sm font-mono font-black text-blue-500 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100">
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <span className="text-[11px] md:text-sm font-mono font-black text-blue-500 bg-blue-50 px-2 md:px-3 py-0.5 md:py-1 rounded-lg border border-blue-100">
                                 {item.v}
                               </span>
                             </td>
-                            <td className="px-8 py-6">
-                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                <Search size={12} className="opacity-40" />
+                            <td className="px-6 md:px-8 py-4 md:py-6">
+                              <div className="flex items-center gap-2 text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                <Search size={10} className="md:w-3 md:h-3 opacity-40" />
                                 {item.note}
                               </div>
                             </td>
@@ -783,14 +820,14 @@ export default function FundPortal() {
                 </div>
 
                 {/* Developer Guidelines - Keep as a full width bento block */}
-                <div className="bg-blue-50 rounded-[2.5rem] p-10 border border-blue-100 flex items-center gap-8 shadow-inner shadow-blue-200/20">
-                  <div className="p-4 bg-white rounded-2xl text-blue-600 shadow-lg shrink-0">
-                    <LayoutDashboard size={32} />
+                <div className="bg-blue-50 rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-10 border border-blue-100 flex flex-col md:flex-row items-center gap-6 md:gap-8 shadow-inner shadow-blue-200/20">
+                  <div className="p-3 md:p-4 bg-white rounded-2xl text-blue-600 shadow-lg shrink-0">
+                    <LayoutDashboard className="w-6 h-6 md:w-8 md:h-8" />
                   </div>
-                  <div className="space-y-2">
-                     <h5 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Developer Guidelines</h5>
-                     <p className="text-xs font-bold text-blue-900 leading-relaxed tracking-tight">
-                       重要事項：境內調用 <code className="bg-blue-100 font-mono text-[10px] px-1.5 py-0.5 rounded">GetTWFundInfo1</code>，境外調用 <code className="bg-blue-100 font-mono text-[10px] px-1.5 py-0.5 rounded">GetFundInfo1</code>。<br/>
+                  <div className="space-y-2 text-center md:text-left">
+                     <h5 className="text-[9px] md:text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Developer Guidelines</h5>
+                     <p className="text-[11px] md:text-xs font-bold text-blue-900 leading-relaxed tracking-tight">
+                       重要事項：境內調用 <code className="bg-blue-100 font-mono text-[10px] px-1.5 py-0.5 rounded">GetTWFundInfo1</code>，境外調用 <code className="bg-blue-100 font-mono text-[10px] px-1.5 py-0.5 rounded">GetFundInfo1</code>。<br className="hidden md:block"/>
                        若混用將導致數據結構錯位，上架前必須以此規範進行單元測試。
                      </p>
                   </div>
@@ -802,12 +839,12 @@ export default function FundPortal() {
       </main>
 
       {/* Bento Footer */}
-      <footer className="flex flex-col md:flex-row justify-between items-center py-4 px-10 bg-white border border-slate-200 rounded-[2rem] text-[9px] font-black text-slate-400 uppercase tracking-[0.25em] shadow-sm">
-        <div className="flex gap-6 items-center">
+      <footer className="max-w-[1440px] w-full mx-auto flex flex-col md:flex-row justify-between items-center py-4 px-6 md:px-10 bg-white border border-slate-200 rounded-[1.5rem] md:rounded-[2rem] text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-[0.25em] shadow-sm gap-4">
+        <div className="flex flex-col sm:flex-row gap-4 md:gap-6 items-center text-center">
           <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-200" /> Compliance v11409-01</span>
           <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-200" /> Security Level: High</span>
         </div>
-        <div className="mt-2 md:mt-0 opacity-60">
+        <div className="opacity-60 text-center md:text-right">
           © 2026 POCKET INVESTMENT CONSULTING. ALL RIGHTS RESERVED. INTERNAL ONLY.
         </div>
       </footer>
@@ -821,6 +858,7 @@ export default function FundPortal() {
         }
         ::-webkit-scrollbar {
           width: 6px;
+          height: 6px;
         }
         ::-webkit-scrollbar-track {
           background: transparent;
@@ -831,6 +869,13 @@ export default function FundPortal() {
         }
         ::-webkit-scrollbar-thumb:hover {
           background: #cbd5e1;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
     </div>
