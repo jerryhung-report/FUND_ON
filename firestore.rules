@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions (The 8 Pillars) ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Entity Validations ---
+
+    function isValidHistoryFund(data) {
+      return data.keys().hasAll(['code', 'name', 'effectiveDate', 'gmSign'])
+        && data.keys().size() >= 4 && data.keys().size() <= 10
+        && data.code is string && data.code.size() <= 20
+        && data.name is string && data.name.size() <= 500
+        && data.effectiveDate is string
+        && data.gmSign is string;
+    }
+
+    function isValidChecklistItem(data) {
+      return data.keys().hasAll(['id', 'completed'])
+        && data.keys().size() >= 2 && data.keys().size() <= 5
+        && data.id is int
+        && data.completed is bool
+        && (data.get('date', '') is string);
+    }
+
+    // --- Collection Rules ---
+
+    // Permanent History Storage
+    match /history/{fundCode} {
+      allow get, list: if isVerified();
+      
+      // Permanently stored: Create allowed only once per ID, no updates or deletes.
+      allow create: if isVerified() 
+        && isValidId(fundCode) 
+        && fundCode == incoming().code
+        && isValidHistoryFund(incoming());
+      
+      allow update, delete: if false;
+    }
+
+    // Active Session Checklist State
+    match /session_state/checklist/items/{itemId} {
+      allow read: if isVerified();
+      
+      allow create, update: if isVerified()
+        && isValidId(itemId)
+        && isValidChecklistItem(incoming())
+        // Ensure atomic updates to specific fields
+        && (request.method == 'create' || incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'date', 'updatedBy']));
+      
+      // Allow clearing items if needed for a new session
+      allow delete: if isVerified();
+    }
+  }
+}

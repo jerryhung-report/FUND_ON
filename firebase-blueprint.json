@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "HistoryFund": {
+      "title": "History Fund Record",
+      "description": "Permanent record of a completed fund listing audit",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Fund unique code" },
+        "name": { "type": "string", "description": "Full fund name with warnings" },
+        "effectiveDate": { "type": "string", "format": "date", "description": "Listing effective date" },
+        "pmSign": { "type": "string", "description": "Timestamp of PM signature" },
+        "opsSign": { "type": "string", "description": "Timestamp of OPS signature" },
+        "gmSign": { "type": "string", "description": "Timestamp of GM signature" },
+        "archivedAt": { "type": "string", "format": "date-time", "description": "When the record was moved to history" }
+      },
+      "required": ["code", "name", "effectiveDate", "gmSign"]
+    },
+    "ChecklistItem": {
+      "title": "Checklist Item State",
+      "description": "Current state of a checklist task in the active session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "completed": { "type": "boolean" },
+        "date": { "type": "string", "description": "Date of completion" },
+        "updatedBy": { "type": "string", "description": "UID of the user who last updated this" }
+      },
+      "required": ["id", "completed"]
+    }
+  },
+  "firestore": {
+    "/history/{fundCode}": {
+      "schema": "HistoryFund",
+      "description": "Permanent archive of listed funds"
+    },
+    "/session_state/checklist/items/{itemId}": {
+      "schema": "ChecklistItem",
+      "description": "Collaborative real-time state for the active audit checklist"
+    }
+  }
+}

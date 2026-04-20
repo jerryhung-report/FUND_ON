@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ClipboardCheck, 
   Settings, 
@@ -23,10 +23,27 @@ import {
   AlertCircle,
   LayoutDashboard,
   Clock,
-  ChevronRight
+  ChevronRight,
+  ChevronDown,
+  LogOut,
+  User as UserIcon,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+import Image from 'next/image';
+import { db, auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from '@/lib/firebase';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  onSnapshot, 
+  query, 
+  getDocs, 
+  writeBatch,
+  serverTimestamp,
+  orderBy
+} from 'firebase/firestore';
 
 // --- Types ---
 
@@ -119,28 +136,100 @@ export default function FundPortal() {
   const [historyFunds, setHistoryFunds] = useState<HistoryFund[]>(HISTORY_FUNDS);
   const [fundType, setFundType] = useState('domestic');
   const [searchTerm, setSearchTerm] = useState('');
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState<string>('');
+
+  // --- Firebase Auth & Sync ---
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync Checklist
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, 'session_state/checklist/items'), orderBy('id', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        // Initialize if empty
+        const batch = writeBatch(db);
+        INITIAL_CHECKLIST.forEach(item => {
+          const docRef = doc(db, 'session_state/checklist/items', item.id.toString());
+          batch.set(docRef, item);
+        });
+        batch.commit();
+      } else {
+        const items = snapshot.docs.map(doc => doc.data() as ChecklistItem);
+        setChecklist(items);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Sync History
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, 'history'), orderBy('archivedAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const funds = snapshot.docs.map(doc => doc.data() as HistoryFund);
+        setHistoryFunds(funds);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
+
+  const handleLogout = () => signOut(auth);
 
   // Checklist toggle logic
-  const toggleCheck = (id: number) => {
+  const toggleCheck = async (id: number) => {
+    if (!user) {
+      alert('請先登入後再進行簽署。');
+      return;
+    }
+
+    const itemToToggle = checklist.find(i => i.id === id);
+    if (!itemToToggle) return;
+
     const isFinalApproval = id === 13;
     const otherTasksCompleted = checklist.filter(i => i.id !== 13).every(i => i.completed);
 
-    if (isFinalApproval && !otherTasksCompleted) {
+    if (isFinalApproval && !otherTasksCompleted && !itemToToggle.completed) {
       alert('請先完成上方所有檢核項目，才能進行最終核准簽署。');
       return;
     }
 
-    setChecklist(prev => prev.map(item => {
-      if (item.id === id) {
-        const isDone = !item.completed;
-        return { 
-          ...item, 
-          completed: isDone, 
-          date: isDone ? new Date().toLocaleDateString('zh-TW') : '' 
-        };
-      }
-      return item;
-    }));
+    const isDone = !itemToToggle.completed;
+    const docRef = doc(db, 'session_state/checklist/items', id.toString());
+    
+    try {
+      await setDoc(docRef, {
+        ...itemToToggle,
+        completed: isDone,
+        date: isDone ? new Date().toLocaleDateString('zh-TW') : '',
+        updatedBy: user.uid
+      }, { merge: true });
+    } catch (error) {
+      console.error("Update failed:", error);
+      alert('簽署失敗，請檢查權限或網路連接。');
+    }
   };
 
   // Progress stats calculation
@@ -153,6 +242,23 @@ export default function FundPortal() {
       total
     };
   }, [checklist]);
+
+  // Derived History Dates
+  const availableHistoryDates = useMemo(() => {
+    const dates = historyFunds
+      .map(f => f.effectiveDate)
+      .filter((date, index, self) => date && self.indexOf(date) === index);
+    return dates.sort((a, b) => b.localeCompare(a)); // Newest first
+  }, [historyFunds]);
+
+  // Use derived selected date to avoid setState in effect
+  const activeHistoryDate = selectedHistoryDate || (availableHistoryDates.length > 0 ? availableHistoryDates[0] : '');
+
+  // Filtered History
+  const filteredHistory = useMemo(() => {
+    if (!activeHistoryDate) return historyFunds;
+    return historyFunds.filter(h => h.effectiveDate === activeHistoryDate);
+  }, [historyFunds, activeHistoryDate]);
 
   // Excel Export logic
   const handleExportExcel = () => {
@@ -216,7 +322,12 @@ export default function FundPortal() {
   };
 
   // Archive logic
-  const handleArchive = () => {
+  const handleArchive = async () => {
+    if (!user) {
+      alert('請先登入。');
+      return;
+    }
+
     if (stats.percent < 100) {
       alert('所有檢核項目尚未完成，請先完成簽署再歸檔。');
       return;
@@ -227,25 +338,72 @@ export default function FundPortal() {
       return;
     }
 
+    if (!confirm(`確定要將 ${scheduledFunds.length} 筆基金歸檔至歷史紀錄嗎？歸檔後將重置當前進度。`)) {
+      return;
+    }
+
     const today = new Date().toLocaleDateString('zh-TW');
     const pmSignDate = checklist.find(i => i.id === 3)?.date || today;
     const opsSignDate = checklist.find(i => i.id === 5)?.date || today;
     const gmSignDate = checklist.find(i => i.id === 13)?.date || today;
 
-    const newHistoryRecords: HistoryFund[] = scheduledFunds.map(fund => ({
-      code: fund.code,
-      name: fund.name,
-      effectiveDate: today, // Using today as the effective base date
-      pmSign: pmSignDate,
-      opsSign: opsSignDate,
-      gmSign: gmSignDate
-    }));
+    try {
+      const batch = writeBatch(db);
+      
+      scheduledFunds.forEach(fund => {
+        const recordRef = doc(db, 'history', fund.code);
+        batch.set(recordRef, {
+          code: fund.code,
+          name: fund.name,
+          effectiveDate: today,
+          pmSign: pmSignDate,
+          opsSign: opsSignDate,
+          gmSign: gmSignDate,
+          archivedAt: serverTimestamp()
+        });
+      });
 
-    setHistoryFunds(prev => [...newHistoryRecords, ...prev]);
-    setScheduledFunds([]); // Clear pipeline after successful archive
-    setChecklist(INITIAL_CHECKLIST); // Reset checklist for next batch
-    alert(`已完成審議運作，共 ${newHistoryRecords.length} 筆基金成功保存至歷史紀錄。`);
-    setActiveTab('history'); // Move to history view to see results
+      // Reset checklist in Firestore
+      checklist.forEach(item => {
+        const itemRef = doc(db, 'session_state/checklist/items', item.id.toString());
+        batch.update(itemRef, {
+          completed: false,
+          date: '',
+          updatedBy: user.uid
+        });
+      });
+
+      await batch.commit();
+
+      // --- NEW: Sync to Google Sheets ---
+      try {
+        const sheetData = scheduledFunds.map(fund => ({
+          code: fund.code,
+          name: fund.name,
+          effectiveDate: today,
+          pmSign: pmSignDate,
+          opsSign: opsSignDate,
+          gmSign: gmSignDate,
+        }));
+
+        await fetch('/api/sheets/append', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: sheetData }),
+        });
+      } catch (sheetsErr) {
+        console.error("Google Sheets sync failed:", sheetsErr);
+        // We don't block the UI here as Firestore succeeded, 
+        // but we log it for the developer.
+      }
+
+      setScheduledFunds([]); 
+      alert(`已完成審議運作，共 ${scheduledFunds.length} 筆基金成功保存至永久歷史紀錄 (並嘗試同步至 Google Sheets)。`);
+      setActiveTab('history');
+    } catch (error) {
+      console.error("Archive failed:", error);
+      alert('歸檔失敗，請確認是否已有相同代碼之基金已歸檔。');
+    }
   };
 
   return (
@@ -311,14 +469,75 @@ export default function FundPortal() {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
+          {user ? (
+            <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-2xl px-3 py-1.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 relative overflow-hidden">
+                {user.photoURL ? (
+                  <Image 
+                    src={user.photoURL} 
+                    alt="avatar" 
+                    fill 
+                    className="object-cover" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <UserIcon size={16} />
+                )}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black leading-none text-slate-700">{user.displayName || 'User'}</span>
+                <span className="text-[8px] font-bold text-slate-400 mt-0.5 flex items-center gap-1">
+                  <ShieldCheck size={8} className="text-emerald-500" /> AUTH VERIFIED
+                </span>
+              </div>
+              <button 
+                onClick={handleLogout}
+                className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition-colors flex items-center justify-center ml-1 shadow-sm"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={handleLogin}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-600 text-white rounded-xl text-xs font-black transition-all shadow-lg shadow-blue-200 uppercase tracking-widest active:scale-95"
+            >
+              登入系統
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main Content (Bento Layout) */}
       <main className="flex-grow max-w-[1440px] w-full mx-auto">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
+          {(!user && !isLoading) ? (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="h-[60vh] flex flex-col items-center justify-center text-center px-6"
+            >
+              <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-[2rem] flex items-center justify-center mb-8 shadow-xl shadow-blue-100">
+                <ShieldCheck size={40} />
+              </div>
+              <h2 className="text-3xl font-black text-slate-800 tracking-tighter mb-4">系統存取受限</h2>
+              <p className="text-slate-500 max-w-md font-bold leading-relaxed mb-8">
+                本系統為口袋投顧內部專用。請先使用 Google 帳號登入，以同步歷史紀錄並進行線上簽署。
+              </p>
+              <button 
+                onClick={handleLogin}
+                className="flex items-center gap-3 px-10 py-5 bg-blue-700 hover:bg-blue-600 text-white rounded-3xl text-sm font-black transition-all shadow-2xl shadow-blue-200 uppercase tracking-[0.2em] active:scale-95"
+              >
+                使用公司帳號登入
+              </button>
+            </motion.div>
+          ) : isLoading ? (
+             <div className="h-[60vh] flex flex-col items-center justify-center">
+                <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+             </div>
+          ) : (
+            <motion.div
+              key={activeTab}
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.02 }}
@@ -590,20 +809,44 @@ export default function FundPortal() {
                   </div>
                   <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 justify-center w-full lg:max-w-xl">
                     <div className="relative group w-full">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16}/>
-                      <input 
-                        type="date" 
-                        className="pl-12 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold w-full outline-none transition-all focus:bg-white focus:ring-4 focus:ring-blue-100 text-slate-600 appearance-none"
-                        defaultValue="2026-04-20"
-                      />
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
-                        <span className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest">生效基準日</span>
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors pointer-events-none" size={16}/>
+                      <select 
+                        className="pl-12 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold w-full outline-none transition-all focus:bg-white focus:ring-4 focus:ring-blue-100 text-slate-600 appearance-none cursor-pointer"
+                        value={activeHistoryDate}
+                        onChange={(e) => setSelectedHistoryDate(e.target.value)}
+                      >
+                        {availableHistoryDates.length === 0 ? (
+                          <option value="">暫無歷史紀錄</option>
+                        ) : (
+                          availableHistoryDates.map(date => (
+                            <option key={date} value={date}>{date}</option>
+                          ))
+                        )}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <ChevronDown className="text-slate-300" size={14} />
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 -top-3 hidden sm:block">
+                        <span className="text-[8px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-100">篩選生效基準日</span>
                       </div>
                     </div>
                   </div>
-                  <button className="w-full lg:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-3xl text-[10px] md:text-xs font-black shadow-lg transition-all active:scale-95 uppercase tracking-widest">
-                    <FileSearch size={16}/> Build Audit Report
-                  </button>
+                  <div className="flex gap-2 w-full lg:w-auto">
+                    <button 
+                      onClick={() => {
+                        const sheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID;
+                        if (sheetId) {
+                          window.open(`https://docs.google.com/spreadsheets/d/${sheetId}`, '_blank', 'noopener,noreferrer');
+                        } else {
+                          alert('系統尚未設定 Google Sheets ID');
+                        }
+                      }}
+                      className="flex-grow lg:flex-grow-0 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-3xl text-[10px] md:text-xs font-black shadow-lg transition-all active:scale-95 uppercase tracking-widest"
+                      title="在新視窗開啟 Google Sheets 報表"
+                    >
+                      <FileSearch size={16}/> Build Audit Report
+                    </button>
+                  </div>
                 </div>
 
                 <div className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
@@ -617,7 +860,7 @@ export default function FundPortal() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {historyFunds.map((h, idx) => (
+                        {filteredHistory.map((h, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="p-6 md:p-8">
                               <div className="font-black text-slate-800 text-base md:text-lg tracking-tight line-clamp-2 md:line-clamp-none">{h.name}</div>
@@ -834,7 +1077,8 @@ export default function FundPortal() {
                 </div>
               </div>
             )}
-          </motion.div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
