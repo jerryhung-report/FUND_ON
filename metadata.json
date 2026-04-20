@@ -1,0 +1,6 @@
+{
+  "name": "基金上架審議",
+  "description": "Internal operations portal for fund listing checklists, scheduled funds, history, and IT mapping rules.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
