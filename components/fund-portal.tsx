@@ -115,6 +115,8 @@ const MAPPING_RULES: Record<string, MappingRule[]> = {
 export default function FundPortal() {
   const [activeTab, setActiveTab] = useState('summary');
   const [checklist, setChecklist] = useState<ChecklistItem[]>(INITIAL_CHECKLIST);
+  const [scheduledFunds, setScheduledFunds] = useState<Fund[]>(SCHEDULED_FUNDS);
+  const [historyFunds, setHistoryFunds] = useState<HistoryFund[]>(HISTORY_FUNDS);
   const [fundType, setFundType] = useState('domestic');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -155,7 +157,7 @@ export default function FundPortal() {
   // Excel Export logic
   const handleExportExcel = () => {
     // Filter data based on search term (matching table UI)
-    const filteredData = SCHEDULED_FUNDS.filter(f => 
+    const filteredData = scheduledFunds.filter(f => 
       f.name.includes(searchTerm) || f.code.includes(searchTerm)
     );
 
@@ -174,6 +176,76 @@ export default function FundPortal() {
 
     // Download the file
     XLSX.writeFile(workbook, `預定上架清單_${new Date().toLocaleDateString('zh-TW').replace(/\//g, '-')}.xlsx`);
+  };
+
+  // Excel Import logic
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        // Map Excel columns back to Fund interface
+        const importedFunds: Fund[] = data.map(row => ({
+          type: row['類型'] || '未知',
+          code: String(row['基金代碼']) || '00000000',
+          name: row['基金全稱 (含投資警語)'] || '未命名基金',
+          brand: row['發行品牌'] || '未知品牌',
+          progress: '待審核' // Default progress for new imports
+        }));
+
+        if (importedFunds.length > 0) {
+          setScheduledFunds(importedFunds);
+          alert(`成功匯入 ${importedFunds.length} 筆資料！`);
+        } else {
+          alert('Excel 檔案內沒有合法的資料項目。');
+        }
+      } catch (err) {
+        console.error('Import error:', err);
+        alert('匯入失敗，請確認檔案格式是否正確。');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // Archive logic
+  const handleArchive = () => {
+    if (stats.percent < 100) {
+      alert('所有檢核項目尚未完成，請先完成簽署再歸檔。');
+      return;
+    }
+
+    if (scheduledFunds.length === 0) {
+      alert('預定上架清單目前無資料。');
+      return;
+    }
+
+    const today = new Date().toLocaleDateString('zh-TW');
+    const pmSignDate = checklist.find(i => i.id === 3)?.date || today;
+    const opsSignDate = checklist.find(i => i.id === 5)?.date || today;
+    const gmSignDate = checklist.find(i => i.id === 13)?.date || today;
+
+    const newHistoryRecords: HistoryFund[] = scheduledFunds.map(fund => ({
+      code: fund.code,
+      name: fund.name,
+      effectiveDate: today, // Using today as the effective base date
+      pmSign: pmSignDate,
+      opsSign: opsSignDate,
+      gmSign: gmSignDate
+    }));
+
+    setHistoryFunds(prev => [...newHistoryRecords, ...prev]);
+    setScheduledFunds([]); // Clear pipeline after successful archive
+    setChecklist(INITIAL_CHECKLIST); // Reset checklist for next batch
+    alert(`已完成審議運作，共 ${newHistoryRecords.length} 筆基金成功保存至歷史紀錄。`);
+    setActiveTab('history'); // Move to history view to see results
   };
 
   return (
@@ -354,10 +426,13 @@ export default function FundPortal() {
                       <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>
                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Waiting for review</span>
                     </div>
-                    <button className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
-                      stats.percent === 100 ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'
-                    }`}>
-                      {stats.percent === 100 ? '已完成' : '尚未完成'}
+                    <button 
+                      onClick={handleArchive}
+                      className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
+                        stats.percent === 100 ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer' : 'bg-blue-600 hover:bg-blue-500 text-white cursor-not-allowed opacity-80'
+                      }`}
+                    >
+                      {stats.percent === 100 ? '已完成 (確認歸檔)' : '尚未完成'}
                     </button>
                   </div>
                 </div>
@@ -384,7 +459,12 @@ export default function FundPortal() {
                     </div>
                     <div className="flex gap-3">
                       <label className="cursor-pointer">
-                        <input type="file" accept=".xlsx, .xls" className="hidden" onChange={() => alert('Excel 資料已成功匯入 (模擬)')} />
+                        <input 
+                          type="file" 
+                          accept=".xlsx, .xls" 
+                          className="hidden" 
+                          onChange={handleImportExcel} 
+                        />
                         <div className="flex items-center gap-3 px-6 py-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-2xl text-xs font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest whitespace-nowrap">
                           <Upload size={16} className="text-blue-400" />
                           EXCEL 匯入
@@ -414,7 +494,7 @@ export default function FundPortal() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {SCHEDULED_FUNDS.filter(f => f.name.includes(searchTerm) || f.code.includes(searchTerm)).map((fund, idx) => (
+                        {scheduledFunds.filter(f => f.name.includes(searchTerm) || f.code.includes(searchTerm)).map((fund, idx) => (
                           <motion.tr 
                             key={idx} 
                             initial={{ opacity: 0, x: -10 }}
@@ -500,7 +580,7 @@ export default function FundPortal() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {HISTORY_FUNDS.map((h, idx) => (
+                        {historyFunds.map((h, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="p-8">
                               <div className="font-black text-slate-800 text-lg tracking-tight">{h.name}</div>
