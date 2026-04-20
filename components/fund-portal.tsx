@@ -18,6 +18,7 @@ import {
   Search,
   FileSearch,
   Upload,
+  Download,
   CheckSquare,
   AlertCircle,
   LayoutDashboard,
@@ -25,6 +26,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 
 // --- Types ---
 
@@ -118,6 +120,14 @@ export default function FundPortal() {
 
   // Checklist toggle logic
   const toggleCheck = (id: number) => {
+    const isFinalApproval = id === 13;
+    const otherTasksCompleted = checklist.filter(i => i.id !== 13).every(i => i.completed);
+
+    if (isFinalApproval && !otherTasksCompleted) {
+      alert('請先完成上方所有檢核項目，才能進行最終核准簽署。');
+      return;
+    }
+
     setChecklist(prev => prev.map(item => {
       if (item.id === id) {
         const isDone = !item.completed;
@@ -141,6 +151,30 @@ export default function FundPortal() {
       total
     };
   }, [checklist]);
+
+  // Excel Export logic
+  const handleExportExcel = () => {
+    // Filter data based on search term (matching table UI)
+    const filteredData = SCHEDULED_FUNDS.filter(f => 
+      f.name.includes(searchTerm) || f.code.includes(searchTerm)
+    );
+
+    // Map data to friendly names for Excel columns
+    const excelData = filteredData.map(fund => ({
+      '類型': fund.type,
+      '基金代碼': fund.code,
+      '基金全稱 (含投資警語)': fund.name,
+      '發行品牌': fund.brand
+    }));
+
+    // Create workbook and worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '預定上架清單');
+
+    // Download the file
+    XLSX.writeFile(workbook, `預定上架清單_${new Date().toLocaleDateString('zh-TW').replace(/\//g, '-')}.xlsx`);
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800 selection:bg-blue-100 p-6 flex flex-col gap-6">
@@ -257,45 +291,60 @@ export default function FundPortal() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {checklist.map(item => (
-                          <tr 
-                            key={item.id} 
-                            onClick={() => toggleCheck(item.id)}
-                            className={`group cursor-pointer transition-all duration-300 ${item.completed ? 'bg-blue-50/20' : 'hover:bg-slate-50/50'}`}
-                          >
-                            <td className="px-6 py-5">
-                              <div className={`mx-auto w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                item.completed 
-                                ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
-                                : 'border-slate-200 bg-white group-hover:border-blue-300'
-                              }`}>
-                                {item.completed && <CheckCircle2 size={14}/>}
-                              </div>
-                            </td>
-                            <td className="px-6 py-5">
-                              <div className="flex flex-col">
-                                <span className={`text-[9px] font-black uppercase tracking-tighter mb-0.5 transition-colors ${item.completed ? 'text-blue-400' : 'text-slate-400'}`}>
-                                  {item.section}
+                        {checklist.map(item => {
+                          const isFinal = item.id === 13;
+                          const isLocked = isFinal && !checklist.filter(i => i.id !== 13).every(i => i.completed);
+                          
+                          return (
+                            <tr 
+                              key={item.id} 
+                              onClick={() => toggleCheck(item.id)}
+                              className={`group cursor-pointer transition-all duration-300 ${
+                                item.completed ? 'bg-blue-50/20' : 
+                                isLocked ? 'opacity-40 cursor-not-allowed bg-slate-50/10' : 'hover:bg-slate-50/50'
+                              }`}
+                            >
+                              <td className="px-6 py-5">
+                                <div className={`mx-auto w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                  item.completed 
+                                  ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
+                                  : isLocked ? 'border-dashed border-slate-300 bg-slate-100' : 'border-slate-200 bg-white group-hover:border-blue-300'
+                                }`}>
+                                  {item.completed && <CheckCircle2 size={14}/>}
+                                  {isLocked && <div className="w-1.5 h-1.5 bg-slate-400 rounded-full" />}
+                                </div>
+                              </td>
+                              <td className="px-6 py-5">
+                                <div className="flex flex-col">
+                                  <span className={`text-[9px] font-black uppercase tracking-tighter mb-0.5 transition-colors ${
+                                    item.completed ? 'text-blue-400' : isLocked ? 'text-slate-300' : 'text-slate-400'
+                                  }`}>
+                                    {item.section}
+                                  </span>
+                                  <span className={`text-xs font-bold leading-tight transition-all ${
+                                    item.completed ? 'text-slate-300 line-through italic' : isLocked ? 'text-slate-400' : 'text-slate-700'
+                                  }`}>
+                                    {item.task}
+                                    {isLocked && <span className="ml-2 text-[8px] font-normal text-slate-400 italic">(需先完成上方項目)</span>}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-5">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full border transition-all ${
+                                  item.completed ? 'bg-slate-50 text-slate-300 border-slate-100' : 
+                                  isLocked ? 'bg-slate-50 text-slate-300 border-slate-100' : 'bg-white text-slate-500 border-slate-200'
+                                }`}>
+                                  {item.role}
                                 </span>
-                                <span className={`text-xs font-bold leading-tight transition-all ${item.completed ? 'text-slate-300 line-through italic' : 'text-slate-700'}`}>
-                                  {item.task}
+                              </td>
+                              <td className="px-6 py-5">
+                                <span className="text-[10px] font-mono text-slate-400 uppercase">
+                                  {item.date || '--'}
                                 </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-5">
-                              <span className={`text-[10px] font-bold px-2 py-1 rounded-full border transition-all ${
-                                item.completed ? 'bg-slate-50 text-slate-300 border-slate-100' : 'bg-white text-slate-500 border-slate-200'
-                              }`}>
-                                {item.role}
-                              </span>
-                            </td>
-                            <td className="px-6 py-5">
-                              <span className="text-[10px] font-mono text-slate-400 uppercase">
-                                {item.date || '--'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -305,7 +354,11 @@ export default function FundPortal() {
                       <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>
                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Waiting for review</span>
                     </div>
-                    <button className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95">Batch Sign-off</button>
+                    <button className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
+                      stats.percent === 100 ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'
+                    }`}>
+                      {stats.percent === 100 ? '已完成' : '尚未完成'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -329,13 +382,22 @@ export default function FundPortal() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
-                    <label className="cursor-pointer">
-                      <input type="file" accept=".xlsx, .xls" className="hidden" onChange={() => alert('Excel 對應表已成功上傳 (模擬)')} />
-                      <div className="flex items-center gap-3 px-6 py-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-2xl text-xs font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest whitespace-nowrap">
-                        <Upload size={16} className="text-blue-400" />
-                        Excel 對應上傳
-                      </div>
-                    </label>
+                    <div className="flex gap-3">
+                      <label className="cursor-pointer">
+                        <input type="file" accept=".xlsx, .xls" className="hidden" onChange={() => alert('Excel 資料已成功匯入 (模擬)')} />
+                        <div className="flex items-center gap-3 px-6 py-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-2xl text-xs font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest whitespace-nowrap">
+                          <Upload size={16} className="text-blue-400" />
+                          EXCEL 匯入
+                        </div>
+                      </label>
+                      <button 
+                        onClick={handleExportExcel}
+                        className="flex items-center gap-3 px-6 py-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-black transition-all shadow-sm active:scale-95 uppercase tracking-widest whitespace-nowrap"
+                      >
+                        <Download size={16} className="text-emerald-500" />
+                        EXCEL 匯出
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -383,22 +445,14 @@ export default function FundPortal() {
                               </span>
                             </td>
                             <td className="px-8 py-6 text-center">
-                              <div className="flex items-center justify-center gap-3">
-                                <label className="cursor-pointer group/upload">
-                                  <input type="file" accept=".xlsx, .xls" className="hidden" onChange={() => alert(`已為基金 ${fund.code} 上傳對應表 (模擬)`)} />
-                                  <div className="w-9 h-9 rounded-xl bg-slate-50 text-slate-300 flex items-center justify-center group-hover:bg-amber-100 group-hover:text-amber-600 transition-all shadow-sm">
-                                    <Upload size={16}/>
-                                  </div>
-                                </label>
-                                <a 
-                                  href="https://sites.google.com/cmoneyfund.com.tw/report/%E9%A6%96%E9%A0%81"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="w-9 h-9 rounded-xl bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                >
-                                  <ChevronRight size={18}/>
-                                </a>
-                              </div>
+                              <a 
+                                href="https://sites.google.com/cmoneyfund.com.tw/report/%E9%A6%96%E9%A0%81"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mx-auto w-9 h-9 rounded-xl bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                              >
+                                <ChevronRight size={18}/>
+                              </a>
                             </td>
                           </motion.tr>
                         ))}
