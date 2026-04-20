@@ -13,7 +13,7 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn(); // Relaxed to allow corporate SSO users
     }
 
     function incoming() {
@@ -32,18 +32,21 @@ service cloud.firestore {
 
     function isValidHistoryFund(data) {
       return data.keys().hasAll(['code', 'name', 'effectiveDate', 'gmSign'])
-        && data.keys().size() >= 4 && data.keys().size() <= 10
-        && data.code is string && data.code.size() <= 20
-        && data.name is string && data.name.size() <= 500
+        && data.keys().size() >= 4 && data.keys().size() <= 12
+        && data.code is string && data.code.size() <= 40
+        && data.name is string && data.name.size() <= 1000
         && data.effectiveDate is string
         && data.gmSign is string;
     }
 
     function isValidChecklistItem(data) {
-      return data.keys().hasAll(['id', 'completed'])
-        && data.keys().size() >= 2 && data.keys().size() <= 5
+      return data.keys().hasAll(['id', 'completed', 'section', 'task', 'role'])
+        && data.keys().size() >= 5 && data.keys().size() <= 8
         && data.id is int
         && data.completed is bool
+        && data.section is string
+        && data.task is string
+        && data.role is string
         && (data.get('date', '') is string);
     }
 
@@ -51,7 +54,7 @@ service cloud.firestore {
 
     // Permanent History Storage
     match /history/{fundCode} {
-      allow get, list: if isVerified();
+      allow get, list: if isSignedIn();
       
       // Permanently stored: Create allowed only once per ID, no updates or deletes.
       allow create: if isVerified() 
@@ -64,7 +67,7 @@ service cloud.firestore {
 
     // Active Session Checklist State
     match /session_state/checklist/items/{itemId} {
-      allow read: if isVerified();
+      allow read: if isSignedIn();
       
       allow create, update: if isVerified()
         && isValidId(itemId)
