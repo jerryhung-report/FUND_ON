@@ -51,14 +51,14 @@ export async function POST(req: Request) {
     // Check if we need to add headers (if row 1 is empty)
     const checkHeaders = await sheets.spreadsheets.values.get({
       spreadsheetId: targetSheetId,
-      range: `${sheetName}!A1:G1`,
+      range: `'${sheetName}'!A1:G1`,
     });
 
     if (!checkHeaders.data.values || checkHeaders.data.values.length === 0) {
       console.log('Sheet is empty, initializing headers...');
       await sheets.spreadsheets.values.update({
         spreadsheetId: targetSheetId,
-        range: `${sheetName}!A1:G1`,
+        range: `'${sheetName}'!A1:G1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [['基金代碼', '基金名稱', '生效日期', 'PM 簽核日', '營運簽核日', '總經理簽核日', '歸檔時間']],
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     // Append to sheet
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId: targetSheetId,
-      range: `${sheetName}!A2`, 
+      range: `'${sheetName}'!A:G`, 
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {

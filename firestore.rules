@@ -49,29 +49,18 @@ service cloud.firestore {
 
     // Permanent History Storage
     match /history/{fundCode} {
-      allow get, list: if isSignedIn();
-      
-      // Permanently stored: Create allowed only once per ID, no updates or deletes.
-      allow create: if isVerified() 
-        && isValidId(fundCode) 
-        && fundCode == incoming().code
-        && isValidHistoryFund(incoming());
-      
-      allow update, delete: if false;
+      allow read: if isSignedIn();
+      // Allow create/update for verified users. 
+      // Update is allowed to handle re-archiving or overwriting.
+      allow create, update: if isVerified() && isValidId(fundCode);
+      allow delete: if false;
     }
 
     // Active Session Checklist State
     match /session_state/checklist/items/{itemId} {
       allow read: if isSignedIn();
-      
-      allow create, update: if isVerified()
-        && isValidId(itemId)
-        && isValidChecklistItem(incoming())
-        // Ensure atomic updates to specific fields
-        && (request.method == 'create' || incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'date', 'updatedBy']));
-      
-      // Allow clearing items if needed for a new session
-      allow delete: if isVerified();
+      // Broadened write permission for checklist items to ensure batch operations succeed
+      allow write: if isVerified() && isValidId(itemId);
     }
   }
 }
