@@ -323,6 +323,8 @@ export default function FundPortal() {
 
   // Archive logic
   const handleArchive = async () => {
+    console.log("Archive triggered. User:", user?.email, "Stats:", stats);
+    
     if (!user) {
       alert('請先登入。');
       return;
@@ -348,6 +350,7 @@ export default function FundPortal() {
     const gmSignDate = checklist.find(i => i.id === 13)?.date || today;
 
     try {
+      console.log("Starting Firestore batch...");
       const batch = writeBatch(db);
       
       scheduledFunds.forEach(fund => {
@@ -374,8 +377,10 @@ export default function FundPortal() {
       });
 
       await batch.commit();
+      console.log("Firestore batch committed successfully.");
 
       // --- NEW: Sync to Google Sheets ---
+      console.log("Starting Google Sheets sync...");
       try {
         const sheetData = scheduledFunds.map(fund => ({
           code: fund.code,
@@ -392,24 +397,30 @@ export default function FundPortal() {
           body: JSON.stringify({ records: sheetData }),
         });
 
-        const sheetResult = await sheetRes.json();
+        let sheetResult;
+        try {
+          sheetResult = await sheetRes.json();
+        } catch (jsonErr) {
+          console.error("Failed to parse sheet response as JSON", jsonErr);
+          throw new Error('試算表 API 回傳格式錯誤 (非 JSON)');
+        }
 
         if (!sheetRes.ok) {
-          throw new Error(sheetResult.error || 'Sheets API returned an error');
+          throw new Error(sheetResult.error || `Sheets API error: ${sheetRes.status}`);
         }
 
         console.log(`Successfully synced to Google Sheet: ${sheetResult.sheetName}`);
         alert(`歸檔成功！資料已同步至永久歷史庫與試算表 (${sheetResult.sheetName})。`);
       } catch (sheetsErr: any) {
         console.error("Google Sheets sync failed:", sheetsErr);
-        alert(`注意：Firestore 歸檔成功，但 Google Sheets 同步失敗：${sheetsErr.message}。請確認設定或手動核對。`);
+        alert(`注意：系統進度已重置且 Firestore 歸檔成功，但 Google Sheets 同步失敗：${sheetsErr.message}。`);
       }
 
       setScheduledFunds([]); 
       setActiveTab('history');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Archive failed:", error);
-      alert('歸檔失敗，請確認是否已有相同代碼之基金已歸檔。');
+      alert(`歸檔失敗：${error.message || '未知錯誤'}。請確認是否已有相同代碼之基金已歸檔。`);
     }
   };
 
@@ -841,17 +852,29 @@ export default function FundPortal() {
                   <div className="flex gap-2 w-full lg:w-auto">
                     <button 
                       onClick={() => {
-                        const sheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID;
+                        let sheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID?.trim();
                         if (sheetId) {
-                          window.open(`https://docs.google.com/spreadsheets/d/${sheetId}`, '_blank', 'noopener,noreferrer');
+                          // Handle case where user might have pasted the full URL
+                          if (sheetId.includes('/d/')) {
+                            const match = sheetId.match(/\/d\/([\w-]+)/);
+                            if (match) sheetId = match[1];
+                          } else if (sheetId.startsWith('http')) {
+                            // Extract last part of URL if it looks like an ID
+                            const parts = sheetId.split('/');
+                            sheetId = parts.filter(p => p.length > 20 && !p.includes('.'))[0] || sheetId;
+                          }
+                          
+                          const targetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+                          console.log('Opening Sheets URL:', targetUrl);
+                          window.open(targetUrl, '_blank', 'noopener,noreferrer');
                         } else {
-                          alert('系統尚未設定 Google Sheets ID');
+                          alert('系統尚未設定 Google Sheets ID，請在 Secrets 中設定 NEXT_PUBLIC_GOOGLE_SHEET_ID');
                         }
                       }}
                       className="flex-grow lg:flex-grow-0 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-3xl text-[10px] md:text-xs font-black shadow-lg transition-all active:scale-95 uppercase tracking-widest"
-                      title="在新視窗開啟 Google Sheets 報表"
+                      title="檢視歷史紀錄留存 (Google Sheets)"
                     >
-                      <FileSearch size={16}/> Build Audit Report
+                      <FileSearch size={16}/> 檢視歷史紀錄留存
                     </button>
                   </div>
                 </div>

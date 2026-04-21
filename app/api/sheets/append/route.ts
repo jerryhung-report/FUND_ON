@@ -39,6 +39,25 @@ export async function POST(req: Request) {
     const sheetName = spreadsheet.data.sheets?.[0]?.properties?.title || 'Sheet1';
     console.log(`Targeting sheet: ${sheetName}`);
 
+    // --- Header Initialization ---
+    // Check if we need to add headers (if row 1 is empty)
+    const checkHeaders = await sheets.spreadsheets.values.get({
+      spreadsheetId: targetSheetId,
+      range: `${sheetName}!A1:G1`,
+    });
+
+    if (!checkHeaders.data.values || checkHeaders.data.values.length === 0) {
+      console.log('Sheet is empty, initializing headers...');
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: targetSheetId,
+        range: `${sheetName}!A1:G1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['基金代碼', '基金名稱', '生效日期', 'PM 簽核日', '營運簽核日', '總經理簽核日', '歸檔時間']],
+        },
+      });
+    }
+
     // Prepare data for Google Sheets
     // Columns: Code, Name, Effective Date, PM Sign, Ops Sign, GM Sign, Archive Time
     const values = records.map((record: any) => [
