@@ -139,6 +139,8 @@ export default function FundPortal() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedHistoryDate, setSelectedHistoryDate] = useState<string>('');
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
 
   // --- Firebase Auth & Sync ---
 
@@ -331,18 +333,22 @@ export default function FundPortal() {
     }
 
     if (stats.percent < 100) {
-      alert('所有檢核項目尚未完成，請先完成簽署再歸檔。');
+      alert(`所有檢核項目尚未完成 (${stats.done}/${stats.total})，請先完成簽署再歸檔。`);
       return;
     }
 
     if (scheduledFunds.length === 0) {
-      alert('預定上架清單目前無資料。');
+      alert('預定上架清單目前無資料，無法歸檔。');
       return;
     }
 
-    if (!confirm(`確定要將 ${scheduledFunds.length} 筆基金歸檔至歷史紀錄嗎？歸檔後將重置當前進度。`)) {
-      return;
-    }
+    setShowArchiveConfirm(true);
+  };
+
+  const executeArchive = async () => {
+    if (isArchiving) return;
+    setIsArchiving(true);
+    setShowArchiveConfirm(false);
 
     const today = new Date().toLocaleDateString('zh-TW');
     const pmSignDate = checklist.find(i => i.id === 3)?.date || today;
@@ -379,7 +385,7 @@ export default function FundPortal() {
       await batch.commit();
       console.log("Firestore batch committed successfully.");
 
-      // --- NEW: Sync to Google Sheets ---
+      // --- Sync to Google Sheets ---
       console.log("Starting Google Sheets sync...");
       try {
         const sheetData = scheduledFunds.map(fund => ({
@@ -421,6 +427,8 @@ export default function FundPortal() {
     } catch (error: any) {
       console.error("Archive failed:", error);
       alert(`歸檔失敗：${error.message || '未知錯誤'}。請確認是否已有相同代碼之基金已歸檔。`);
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -525,6 +533,51 @@ export default function FundPortal() {
           )}
         </div>
       </header>
+
+      {/* Archive Confirmation Modal */}
+      <AnimatePresence>
+        {showArchiveConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              onClick={() => setShowArchiveConfirm(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200"
+            >
+              <div className="p-8">
+                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-6 border border-emerald-100">
+                  <Database className="text-emerald-600" size={32} />
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2">確認要歸檔錄入嗎？</h3>
+                <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                  目前清單中有 <span className="font-black text-emerald-600">{scheduledFunds.length}</span> 筆基金，歸檔後將永久存儲於歷史庫並重置當前檢核進度。
+                </p>
+              </div>
+              <div className="bg-slate-50 p-4 flex gap-3">
+                <button 
+                  onClick={() => setShowArchiveConfirm(false)}
+                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  再想想
+                </button>
+                <button 
+                  onClick={executeArchive}
+                  className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-black shadow-lg shadow-emerald-200 transition-all active:scale-95"
+                >
+                  確認並存儲
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content (Bento Layout) */}
       <main className="flex-grow max-w-[1440px] w-full mx-auto">
@@ -702,11 +755,20 @@ export default function FundPortal() {
                     </div>
                     <button 
                       onClick={handleArchive}
-                      className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${
+                      disabled={isArchiving}
+                      className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center gap-2 ${
+                        isArchiving ? 'bg-slate-400 cursor-not-allowed' :
                         stats.percent === 100 ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer' : 'bg-blue-600 hover:bg-blue-500 text-white cursor-not-allowed opacity-80'
                       }`}
                     >
-                      {stats.percent === 100 ? '已完成 (確認歸檔)' : '尚未完成'}
+                      {isArchiving ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          歸檔中...
+                        </>
+                      ) : (
+                        stats.percent === 100 ? '已完成 (確認歸檔)' : '將於 100% 開放歸檔'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -751,6 +813,17 @@ export default function FundPortal() {
                         <Download size={14} className="text-emerald-500 md:w-4 md:h-4" />
                         匯出
                       </button>
+                      
+                      {stats.percent === 100 && (
+                        <button 
+                          onClick={handleArchive}
+                          disabled={isArchiving}
+                          className="flex items-center justify-center gap-2 md:gap-3 px-4 md:px-6 py-2.5 md:py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest whitespace-nowrap"
+                        >
+                          <Database size={14} className={isArchiving ? "animate-spin" : ""} />
+                          {isArchiving ? '處理中...' : '確認歸檔'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
