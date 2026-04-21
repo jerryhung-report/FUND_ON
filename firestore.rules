@@ -25,29 +25,24 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 256;
     }
 
     // --- Entity Validations ---
 
     function isValidHistoryFund(data) {
       return data.keys().hasAll(['code', 'name', 'effectiveDate', 'gmSign'])
-        && data.keys().size() >= 4 && data.keys().size() <= 12
-        && data.code is string && data.code.size() <= 40
-        && data.name is string && data.name.size() <= 1000
-        && data.effectiveDate is string
-        && data.gmSign is string;
+        && data.keys().size() >= 4 && data.keys().size() <= 16
+        && data.code is string
+        && data.name is string
+        && data.effectiveDate is string;
     }
 
     function isValidChecklistItem(data) {
       return data.keys().hasAll(['id', 'completed', 'section', 'task', 'role'])
-        && data.keys().size() >= 5 && data.keys().size() <= 8
+        && data.keys().size() >= 5 && data.keys().size() <= 10
         && data.id is int
-        && data.completed is bool
-        && data.section is string
-        && data.task is string
-        && data.role is string
-        && (data.get('date', '') is string);
+        && data.completed is bool;
     }
 
     // --- Collection Rules ---

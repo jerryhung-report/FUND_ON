@@ -30,14 +30,22 @@ export async function POST(req: Request) {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
+    console.log(`Starting sync for Sheet ID: ${targetSheetId}`);
+
     // --- Dynamic Sheet Discovery ---
-    // Instead of assuming "Sheet1", let's find the first sheet name
-    const spreadsheet = await sheets.spreadsheets.get({
-      spreadsheetId: targetSheetId,
-    });
-    
-    const sheetName = spreadsheet.data.sheets?.[0]?.properties?.title || 'Sheet1';
-    console.log(`Targeting sheet: ${sheetName}`);
+    let sheetName = 'Sheet1';
+    try {
+      const spreadsheet = await sheets.spreadsheets.get({
+        spreadsheetId: targetSheetId,
+      });
+      sheetName = spreadsheet.data.sheets?.[0]?.properties?.title || 'Sheet1';
+      console.log(`Successfully connected. Targeting sheet: ${sheetName}`);
+    } catch (authErr: any) {
+      console.error("Auth/Connection Error:", authErr.message);
+      return NextResponse.json({ 
+        error: `無法連線至 Google Sheets: ${authErr.message}。請確認 Service Account 是否已加入共用名單，且 Sheet ID 正確。` 
+      }, { status: 401 });
+    }
 
     // --- Header Initialization ---
     // Check if we need to add headers (if row 1 is empty)

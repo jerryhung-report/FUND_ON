@@ -160,16 +160,25 @@ export default function FundPortal() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
         // Initialize if empty
-        const batch = writeBatch(db);
-        INITIAL_CHECKLIST.forEach(item => {
-          const docRef = doc(db, 'session_state/checklist/items', item.id.toString());
-          batch.set(docRef, item);
-        });
-        batch.commit();
+        const initBatch = async () => {
+          try {
+            const batch = writeBatch(db);
+            INITIAL_CHECKLIST.forEach(item => {
+              const docRef = doc(db, 'session_state/checklist/items', item.id.toString());
+              batch.set(docRef, { ...item, updatedBy: user.uid });
+            });
+            await batch.commit();
+          } catch (err) {
+            console.error("Checklist init error:", err);
+          }
+        };
+        initBatch();
       } else {
         const items = snapshot.docs.map(doc => doc.data() as ChecklistItem);
         setChecklist(items);
       }
+    }, (err) => {
+      console.error("Checklist sync error:", err);
     });
 
     return () => unsubscribe();
@@ -185,6 +194,8 @@ export default function FundPortal() {
         const funds = snapshot.docs.map(doc => doc.data() as HistoryFund);
         setHistoryFunds(funds);
       }
+    }, (err) => {
+      console.error("History sync error:", err);
     });
 
     return () => unsubscribe();
@@ -388,6 +399,12 @@ export default function FundPortal() {
       // --- Sync to Google Sheets ---
       console.log("Starting Google Sheets sync...");
       try {
+        let sheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID?.trim();
+        if (sheetId && sheetId.includes('/d/')) {
+          const match = sheetId.match(/\/d\/([\w-]+)/);
+          if (match) sheetId = match[1];
+        }
+
         const sheetData = scheduledFunds.map(fund => ({
           code: fund.code,
           name: fund.name,
@@ -400,7 +417,10 @@ export default function FundPortal() {
         const sheetRes = await fetch('/api/sheets/append', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records: sheetData }),
+          body: JSON.stringify({ 
+            records: sheetData,
+            sheetId: sheetId 
+          }),
         });
 
         let sheetResult;
